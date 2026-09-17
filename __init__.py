@@ -12,8 +12,23 @@ from typing import Any
 from providers import register_provider
 from providers.base import ProviderProfile
 
-# Public API re-exports (used by tests and power users to inspect what will spawn).
-from .kiro_acp_client import KiroACPClient, resolve_kiro_args, resolve_kiro_command  # noqa: F401
+
+def resolve_kiro_command() -> str:
+    """Binary override order: HERMES_KIRO_ACP_COMMAND → KIRO_CLI_PATH → kiro-cli.
+
+    Delegates to the client module lazily: importing it at module level drags in
+    agent.copilot_acp_client and its chain, which breaks discovery under some
+    import orders (hermes_cli.config → auth circular window)."""
+    from .kiro_acp_client import resolve_kiro_command as _impl
+
+    return _impl()
+
+
+def resolve_kiro_args() -> list[str]:
+    """Argv override (shlex-split), else ['acp']; see resolve_kiro_command."""
+    from .kiro_acp_client import resolve_kiro_args as _impl
+
+    return _impl()
 
 
 class KiroACPProfile(ProviderProfile):
