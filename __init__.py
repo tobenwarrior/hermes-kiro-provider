@@ -34,6 +34,8 @@ def resolve_kiro_args() -> list[str]:
 class KiroACPProfile(ProviderProfile):
     """Kiro CLI (AWS) via ACP subprocess — external process, no REST endpoint."""
 
+    _MODEL_LIST_CACHE: tuple = ()  # (timestamp, models)
+
     def create_client(self, **client_kwargs: Any) -> Any:
         """Build the ACP stdio shim rather than an HTTP client."""
         from .kiro_acp_client import KiroACPClient
@@ -48,7 +50,23 @@ class KiroACPProfile(ProviderProfile):
     def fetch_models(
         self, *, api_key: str | None = None, base_url: str | None = None, timeout: float = 8.0
     ) -> list[str] | None:
-        """Model listing is handled by the ACP subprocess."""
+        """Live model catalog from the ACP subprocess (session/new reports
+        models.availableModels). Cached for an hour; falls back to None on
+        failure so callers use their own defaults."""
+        import time as _time
+
+        now = _time.time()
+        if self._MODEL_LIST_CACHE and now - self._MODEL_LIST_CACHE[0] < 3600:
+            return list(self._MODEL_LIST_CACHE[1]) or None
+        try:
+            from .kiro_acp_models import list_kiro_models
+
+            models = list_kiro_models(timeout_seconds=min(max(timeout, 20.0), 60.0))
+        except Exception:
+            models = None
+        if models:
+            self.__class__._MODEL_LIST_CACHE = (now, tuple(models))
+            return list(models)
         return None
 
 
